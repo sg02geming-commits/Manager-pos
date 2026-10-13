@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#7c3aed">
+<title>Kasen Manager</title>
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('kasen_manager_theme');
+      if (t !== 'dark' && t !== 'light') {
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    } catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+  })();
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --primary:#7c3aed; --primary-soft:#f5f3ff; --on-primary:#ffffff;
+    --success:#16a34a; --success-soft:#f0fdf4;
+    --danger:#dc2626;  --danger-soft:#fef2f2;
+    --warning:#ea580c; --warning-soft:#fff7ed;
+    --blue:#2563eb;    --blue-soft:#eff6ff;
+    --cyan:#0891b2;    --cyan-soft:#ecfeff;
+    --text:#111827; --muted:#6b7280; --faint:#9ca3af;
+    --bg:#f9fafb; --card:#ffffff; --border:#e5e7eb; --border-soft:#f3f4f6;
+    --toast-bg:#111827; --toast-text:#ffffff;
+    --shadow:0 20px 25px -5px rgba(0,0,0,.10);
+    --info-bg:#f5f3ff; --info-border:#ddd6fe; --info-text:#5b21b6;
+    --warn-bg:#fff7ed; --warn-border:#fed7aa; --warn-text:#78350f;
+    --ok-bg:#f0fdf4;   --ok-border:#bbf7d0;   --ok-text:#14532d;
+    --radius:8px; --radius-lg:12px;
+    --font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-size:clamp(13px, 0.35vw + 12.5px, 15px);
+    --max-w:1100px;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --primary:#8b5cf6; --primary-soft:#2e1065; --on-primary:#ffffff;
+    --success:#22c55e; --success-soft:#052e16;
+    --danger:#f87171;  --danger-soft:#450a0a;
+    --warning:#fb923c; --warning-soft:#431407;
+    --blue:#60a5fa;    --blue-soft:#172554;
+    --cyan:#22d3ee;    --cyan-soft:#083344;
+    --text:#f1f5f9; --muted:#94a3b8; --faint:#64748b;
+    --bg:#0b1220; --card:#111c2e; --border:#243044; --border-soft:#182234;
+    --toast-bg:#f1f5f9; --toast-text:#0b1220;
+    --shadow:0 20px 25px -5px rgba(0,0,0,.6);
+    --info-bg:#2e1065; --info-border:#4c1d95; --info-text:#ddd6fe;
+    --warn-bg:#431407; --warn-border:#7c2d12; --warn-text:#fed7aa;
+    --ok-bg:#052e16;   --ok-border:#166534;   --ok-text:#bbf7d0;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body { overscroll-behavior-y:contain; }
+  body {
+    font-family:var(--font-family); font-size:var(--font-size);
+    background:var(--bg); color:var(--text);
+    margin:0 auto; max-width:var(--max-w);
+    padding:clamp(10px, 2.2vw, 18px);
+    padding-bottom:calc(40px + env(safe-area-inset-bottom));
+    line-height:1.5;
+    min-height:100dvh;
+  }
+  body, .card, .header, .stat-card, .modal, .menu-item, .btn-icon,
+  .form-group input, .form-group select, .form-group textarea,
+  .alert, .empty-state, .login-box, .uc-pin-row, .user-card, .toast,
+  .pin-key, .btn-ghost, .tab, .cloud-item, .role-opt {
+    transition:background-color .25s ease, border-color .25s ease, color .25s ease;
+  }
+  h1,h2,h3,h4 { font-weight:700; line-height:1.3; color:var(--text); }
+  h1 { font-size:17px; }
+  h2 { font-size:15px; }
+  h3 { font-size:15px; margin-bottom:14px; }
+  h4 { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin:16px 0 8px; font-weight:600; }
+  .header { display:flex; align-items:center; gap:8px; padding:10px 12px; margin-bottom:14px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); }
+  .header h1 { flex:1; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .btn-icon { width:36px; height:36px; border-radius:var(--radius); border:1px solid var(--border); background:var(--card); color:var(--text); font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .btn-icon:hover { background:var(--border-soft); }
+  .btn-icon:active { background:var(--border); transform:scale(.95); }
+  #cloudIndicator { cursor:pointer; font-size:14px; }
+  .tabs { display:flex; gap:4px; margin-bottom:14px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:4px; }
+  .tab { flex:1; padding:10px 12px; border:none; background:transparent; border-radius:var(--radius); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; color:var(--muted); display:flex; align-items:center; justify-content:center; gap:6px; }
+  .tab:hover { background:var(--border-soft); color:var(--text); }
+  .tab.active { background:var(--primary); color:var(--on-primary); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  .btn { padding:8px 14px; border:none; border-radius:var(--radius); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:opacity .15s; }
+  .btn:active { opacity:.8; }
+  .btn-primary { background:var(--primary); color:var(--on-primary); }
+  .btn-success { background:var(--success); color:#fff; }
+  .btn-danger  { background:var(--danger); color:#fff; }
+  .btn-warning { background:var(--warning); color:#fff; }
+  .btn-ghost   { background:transparent; color:var(--muted); border:1px solid var(--border); }
+  .btn-ghost:hover { background:var(--border-soft); color:var(--text); }
+  .btn-sm { padding:5px 9px; font-size:11px; border-radius:6px; }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-block { width:100%; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px; margin-bottom:14px; }
+  .card-header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+  .card-header h2 { flex:1; min-width:120px; }
+  .stats-row { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:14px; }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 8px; text-align:center; min-width:0; }
+  .stat-card .label { font-size:10px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stat-card .value { font-size:20px; font-weight:800; color:var(--text); margin-top:4px; }
+  .stat-card.primary .value { color:var(--primary); }
+  .stat-card.success .value { color:var(--success); }
+  .stat-card.warning .value { color:var(--warning); }
+  .user-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap:10px; }
+  .user-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px; display:flex; flex-direction:column; gap:10px; }
+  .user-card:hover { border-color:var(--primary); }
+  .uc-head { display:flex; align-items:center; gap:10px; }
+  .uc-av { width:44px; height:44px; border-radius:50%; background:var(--primary); color:var(--on-primary); font-size:15px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .uc-av.role-leader { background:var(--primary); }
+  .uc-av.role-crew   { background:var(--cyan); }
+  .uc-info { flex:1; min-width:0; }
+  .uc-nama { font-size:14px; font-weight:700; word-break:break-word; }
+  .uc-role { display:inline-block; padding:2px 7px; border-radius:5px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; background:var(--primary-soft); color:var(--primary); margin-top:3px; }
+  .uc-role.role-leader { background:var(--primary-soft); color:var(--primary); }
+  .uc-role.role-crew   { background:var(--cyan-soft); color:var(--cyan); }
+  .uc-pin-row { display:flex; align-items:center; gap:6px; padding:8px 10px; background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius); font-family:'Courier New', monospace; font-size:14px; font-weight:700; letter-spacing:2px; }
+  .uc-pin-row .lbl { font-family:var(--font-family); font-size:10px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+  .uc-pin-row .pin-val { flex:1; color:var(--text); }
+  .uc-pin-row .btn-pin { width:26px; height:26px; border-radius:5px; border:none; background:transparent; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  .uc-pin-row .btn-pin:hover { background:var(--border); }
+  .uc-actions { display:flex; gap:6px; }
+  .uc-actions .btn { flex:1; }
+  .uc-meta { font-size:10px; color:var(--faint); text-align:right; }
+  .cloud-list { display:flex; flex-direction:column; gap:8px; }
+  .cloud-item { background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--radius); padding:12px; cursor:pointer; }
+  .cloud-item:hover { border-color:var(--primary); background:var(--primary-soft); }
+  .cloud-item:active { transform:scale(.99); }
+  .ci-head { display:flex; align-items:center; gap:10px; }
+  .ci-icon { width:40px; height:40px; border-radius:9px; background:var(--primary-soft); color:var(--primary); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .cloud-item:hover .ci-icon { background:var(--primary); color:var(--on-primary); }
+  .ci-info { flex:1; min-width:0; }
+  .ci-title { font-size:12px; font-weight:700; color:var(--text); font-family:'Courier New', monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ci-meta { font-size:11px; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ci-total { font-size:13px; font-weight:700; color:var(--success); flex-shrink:0; text-align:right; }
+  .ci-total .sub { display:block; font-size:10px; font-weight:500; color:var(--muted); margin-top:2px; }
+  .empty-state { padding:40px 20px; text-align:center; background:var(--card); border:1px dashed var(--border); border-radius:var(--radius-lg); }
+  .empty-state .icon { font-size:56px; margin-bottom:12px; opacity:.4; }
+  .empty-state h3 { color:var(--muted); margin-bottom:6px; font-size:15px; }
+  .empty-state p { color:var(--faint); font-size:12px; }
+  .form-group { margin-bottom:12px; }
+  .form-group label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-weight:600; }
+  .form-group input, .form-group textarea, .form-group select { width:100%; padding:10px 12px; font-size:14px; border:1px solid var(--border); border-radius:var(--radius); font-family:inherit; background:var(--card); color:var(--text); }
+  .form-group input:focus, .form-group select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); }
+  .pin-input-wrap { display:flex; gap:6px; }
+  .pin-input-wrap input { flex:1; font-family:'Courier New', monospace; font-size:18px; font-weight:700; letter-spacing:4px; text-align:center; }
+  .pin-input-wrap .btn-gen { padding:0 12px; font-size:18px; }
+  .role-picker { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .role-opt { display:flex; flex-direction:column; gap:6px; padding:14px; border-radius:var(--radius); border:2px solid var(--border); background:var(--card); cursor:pointer; text-align:left; font-family:inherit; color:var(--text); transition:all .15s; }
+  .role-opt:active { transform:scale(.98); }
+  .role-opt .ro-title { font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px; }
+  .role-opt .ro-desc { font-size:11px; color:var(--muted); line-height:1.4; }
+  .role-opt .ro-icon { font-size:20px; }
+  .role-opt.selected.role-crew   { border-color:var(--cyan); background:var(--cyan-soft); }
+  .role-opt.selected.role-leader { border-color:var(--primary); background:var(--primary-soft); }
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:100; align-items:center; justify-content:center; padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+  .modal-bg.active { display:flex; }
+  .modal { background:var(--card); border-radius:var(--radius-lg); padding:20px; width:100%; max-width:440px; max-height:90dvh; overflow-y:auto; box-shadow:var(--shadow); border:1px solid var(--border); }
+  .modal.wide { max-width:600px; }
+  .modal h3 { margin-bottom:14px; }
+  .modal-actions { display:flex; gap:8px; margin-top:16px; }
+  .modal-actions .btn { flex:1; padding:10px; }
+  .error-msg { color:var(--danger); font-size:12px; font-weight:600; min-height:16px; margin-top:4px; }
+  .menu-list { display:flex; flex-direction:column; gap:4px; }
+  .menu-item { display:flex; align-items:center; gap:12px; padding:12px; border-radius:var(--radius); border:1px solid transparent; background:var(--bg); cursor:pointer; text-align:left; font-family:inherit; width:100%; color:var(--text); }
+  .menu-item:hover { background:var(--border-soft); border-color:var(--border); }
+  .menu-item.danger { background:var(--danger-soft); }
+  .menu-item.danger .menu-title { color:var(--danger); }
+  .menu-icon { font-size:18px; width:24px; text-align:center; flex-shrink:0; }
+  .menu-info { flex:1; min-width:0; }
+  .menu-title { font-size:13px; font-weight:600; }
+  .menu-desc { font-size:11px; color:var(--muted); margin-top:2px; }
+  .detail-row { display:flex; justify-content:space-between; gap:8px; padding:8px 0; font-size:13px; border-bottom:1px solid var(--border-soft); }
+  .detail-row:last-child { border-bottom:none; }
+  .detail-row .dk { color:var(--muted); flex-shrink:0; }
+  .detail-row .dv { font-weight:600; text-align:right; word-break:break-word; color:var(--text); }
+  .detail-items { background:var(--bg); border-radius:var(--radius); padding:10px; margin:10px 0; font-family:'Courier New', monospace; font-size:12px; }
+  .detail-items .di-row { display:flex; justify-content:space-between; padding:3px 0; gap:8px; border-bottom:1px dashed var(--border-soft); }
+  .detail-items .di-row:last-child { border-bottom:none; }
+  .cloud-detail-head { display:flex; align-items:center; gap:10px; padding:12px; border-radius:var(--radius); background:var(--primary-soft); margin-bottom:14px; }
+  .cloud-detail-head .cdh-icon { width:44px; height:44px; border-radius:10px; background:var(--primary); color:var(--on-primary); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .cloud-detail-head .cdh-info { flex:1; min-width:0; }
+  .cloud-detail-head .cdh-title { font-size:14px; font-weight:700; font-family:'Courier New', monospace; }
+  .cloud-detail-head .cdh-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .cloud-amount-box { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+  .cloud-amount-box .ca-item { padding:10px; border-radius:var(--radius); background:var(--bg); text-align:center; }
+  .cloud-amount-box .ca-label { font-size:10px; color:var(--muted); text-transform:uppercase; font-weight:600; letter-spacing:.3px; }
+  .cloud-amount-box .ca-value { font-size:13px; font-weight:800; color:var(--text); margin-top:4px; word-break:break-word; }
+  .cloud-amount-box .ca-value.success { color:var(--success); }
+  .cloud-amount-box .ca-value.danger { color:var(--danger); }
+  #loginScreen { position:fixed; inset:0; background:var(--bg); z-index:500; display:none; align-items:center; justify-content:center; padding:16px; overflow-y:auto; }
+  #loginScreen.active { display:flex; }
+  .login-box { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:28px 24px; width:100%; max-width:360px; text-align:center; box-shadow:var(--shadow); margin:auto; }
+  .login-logo { width:60px; height:60px; border-radius:16px; background:var(--primary); color:var(--on-primary); font-size:28px; display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
+  .login-title { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .login-sub { font-size:12px; color:var(--muted); margin-bottom:20px; }
+  .pin-display { display:flex; justify-content:center; gap:10px; margin:20px 0; }
+  .pin-dot { width:14px; height:14px; border-radius:50%; border:2px solid var(--border); transition:all .15s; }
+  .pin-dot.filled { background:var(--primary); border-color:var(--primary); }
+  .pin-display.shake { animation:shake .4s; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  .pin-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:250px; margin:0 auto; }
+  .pin-key { aspect-ratio:1; border-radius:50%; border:1px solid var(--border); background:var(--card); font-size:20px; font-weight:600; font-family:inherit; cursor:pointer; color:var(--text); display:flex; align-items:center; justify-content:center; }
+  .pin-key:hover { background:var(--border-soft); }
+  .pin-key:active { background:var(--primary); color:var(--on-primary); }
+  .pin-key.action { font-size:14px; background:var(--bg); }
+  .pin-key.action.del { color:var(--danger); }
+  .pin-key.action.cancel { color:var(--muted); font-size:12px; }
+  .login-error { color:var(--danger); font-size:12px; font-weight:600; min-height:18px; margin-bottom:6px; }
+  .alert { background:var(--info-bg); border:1px solid var(--info-border); border-radius:var(--radius); padding:12px; margin-bottom:12px; font-size:12px; line-height:1.5; color:var(--info-text); }
+  .alert.orange { background:var(--warn-bg); border-color:var(--warn-border); color:var(--warn-text); }
+  .alert.green  { background:var(--ok-bg);   border-color:var(--ok-border);   color:var(--ok-text); }
+  .filter-row { display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+  .filter-row::-webkit-scrollbar { display:none; }
+  .filter-row .btn { flex-shrink:0; padding:7px 12px; font-size:11px; }
+  .filter-row .btn.active { background:var(--primary); color:var(--on-primary); }
+  .filter-row .btn:not(.active) { background:var(--bg); color:var(--muted); border:1px solid var(--border); }
+  .toast { position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(80px); background:var(--toast-bg); color:var(--toast-text); padding:10px 18px; border-radius:20px; font-size:12px; font-weight:600; z-index:200; transition:transform .3s; max-width:min(90vw, 420px); text-align:center; box-shadow:var(--shadow); }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.success { background:var(--success); color:#fff; }
+  .toast.error   { background:var(--danger);  color:#fff; }
+  @media (max-width: 520px) {
+    .header { padding:8px 10px; gap:6px; }
+    .header h1 { font-size:14px; }
+    .btn-icon { width:34px; height:34px; font-size:15px; }
+    .card { padding:12px; }
+    .stat-card .value { font-size:16px; }
+    .role-picker { grid-template-columns:1fr; }
+    .form-group input, .form-group select, .form-group textarea { font-size:16px; }
+    .cloud-amount-box { grid-template-columns:1fr; }
+  }
+  @media (max-width: 360px) {
+    .stats-row { grid-template-columns:repeat(2, 1fr); }
+    .stat-card:last-child { grid-column:span 2; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo" id="loginLogo">🔐</div>
+    <div class="login-title" id="loginTitle">Kasen Manager</div>
+    <div class="login-sub" id="loginSub">Masukkan PIN Manager</div>
+    <div id="modePin" style="display:none;">
+      <div class="pin-display" id="pinDisplay"></div>
+      <div class="login-error" id="loginError"></div>
+      <div class="pin-pad" id="pinPad">
+        <button class="pin-key" data-d="1">1</button><button class="pin-key" data-d="2">2</button><button class="pin-key" data-d="3">3</button>
+        <button class="pin-key" data-d="4">4</button><button class="pin-key" data-d="5">5</button><button class="pin-key" data-d="6">6</button>
+        <button class="pin-key" data-d="7">7</button><button class="pin-key" data-d="8">8</button><button class="pin-key" data-d="9">9</button>
+        <button class="pin-key action cancel" data-action="cancel">Batal</button>
+        <button class="pin-key" data-d="0">0</button>
+        <button class="pin-key action del" data-action="del">⌫</button>
+      </div>
+    </div>
+    <div id="modeSetup" style="display:none;">
+      <div class="alert orange" style="text-align:left;margin-bottom:14px;">
+        <b>🔐 Setup Pertama</b><br>
+        Buat PIN Manager untuk melindungi aplikasi ini.
+      </div>
+      <div class="form-group" style="text-align:left;">
+        <label>PIN Manager (4-6 angka)</label>
+        <input type="password" id="inpSetupPin" placeholder="••••" inputmode="numeric" maxlength="6" autocomplete="off" style="text-align:center;font-family:'Courier New',monospace;font-size:20px;font-weight:700;letter-spacing:6px;">
+      </div>
+      <div class="form-group" style="text-align:left;">
+        <label>Konfirmasi PIN</label>
+        <input type="password" id="inpSetupPin2" placeholder="••••" inputmode="numeric" maxlength="6" autocomplete="off" style="text-align:center;font-family:'Courier New',monospace;font-size:20px;font-weight:700;letter-spacing:6px;">
+      </div>
+      <div class="login-error" id="setupError"></div>
+      <button class="btn btn-primary btn-block" style="padding:12px;" id="btnDoSetup">Buat PIN Manager</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <h1>🧑‍💼 Kasen Manager</h1>
+  <button class="btn-icon" id="cloudIndicator" title="Cloud">☁️</button>
+  <button class="btn-icon" id="btnTheme" title="Mode Gelap">🌙</button>
+  <button class="btn-icon" id="btnSettings" title="Pengaturan">⚙️</button>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" data-tab="akun"><span>👥</span> Akun</button>
+  <button class="tab" data-tab="laporan"><span>☁️</span> Laporan Cloud</button>
+</div>
+
+<!-- TAB AKUN -->
+<div class="tab-content active" id="tab-akun">
+  <div class="stats-row">
+    <div class="stat-card primary">
+      <div class="label">Total Akun</div>
+      <div class="value" id="statTotal">0</div>
+    </div>
+    <div class="stat-card" style="--primary:var(--cyan)">
+      <div class="label">👑 Leader</div>
+      <div class="value" id="statLeader" style="color:var(--primary)">0</div>
+    </div>
+    <div class="stat-card success">
+      <div class="label">👤 Crew</div>
+      <div class="value" id="statCrew">0</div>
+    </div>
+  </div>
+
+  <div class="alert">
+    ℹ️ <b>Kasen Manager</b> untuk mengelola akun & PIN. Data otomatis terbaca oleh aplikasi <b>Kasir Kasen</b>.
+  </div>
+
+  <div class="alert orange">
+    <b>🎭 Info Role:</b><br>
+    • <b>👑 Leader / SPV</b> — akses penuh: kasir, riwayat, <b>rekapitulasi</b>, edit produk, kategori, pengaturan<br>
+    • <b>👤 Crew</b> — akses terbatas: kasir, riwayat, lihat produk (read-only)
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>👥 Daftar Akun</h2>
+      <button class="btn btn-primary btn-sm" id="btnAddUser">+ Tambah</button>
+    </div>
+    <div id="userList"></div>
+  </div>
+</div>
+
+<!-- TAB LAPORAN -->
+<div class="tab-content" id="tab-laporan">
+  <div class="card" style="padding:12px 14px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="cloudStatusIcon" style="width:40px;height:40px;border-radius:10px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">☁️</div>
+      <div style="flex:1;min-width:0;">
+        <div id="cloudStatusTitle" style="font-size:13px;font-weight:700;">Menghubungkan...</div>
+        <div id="cloudStatusDesc" style="font-size:11px;color:var(--muted);margin-top:2px;">Project: posin-aja</div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btnRefreshCloud">🔄 Refresh</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card primary">
+      <div class="label">Total Closing</div>
+      <div class="value" id="statClosingCount">0</div>
+    </div>
+    <div class="stat-card success">
+      <div class="label">Total Penjualan</div>
+      <div class="value" id="statClosingSales" style="font-size:14px;">Rp 0</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="label">Total Selisih</div>
+      <div class="value" id="statClosingSelisih" style="font-size:14px;">Rp 0</div>
+    </div>
+  </div>
+  <div class="filter-row" id="cloudFilter">
+    <button class="btn active" data-filter="today">Hari Ini</button>
+    <button class="btn" data-filter="week">7 Hari</button>
+    <button class="btn" data-filter="month">Bulan Ini</button>
+    <button class="btn" data-filter="all">Semua</button>
+  </div>
+  <div class="form-group">
+    <input type="text" id="cloudSearch" placeholder="🔍 Cari ID closing / kasir / toko..." autocomplete="off" style="padding:10px 12px;font-size:13px;">
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <h2>📦 Riwayat Tutup Toko</h2>
+      <div id="cloudListCount" style="font-size:11px;color:var(--muted);font-weight:600;">0 data</div>
+    </div>
+    <div id="cloudList"></div>
+  </div>
+</div>
+
+<!-- MODAL USER -->
+<div class="modal-bg" id="userModal"><div class="modal">
+  <h3 id="userModalTitle">Tambah Akun</h3>
+  <div class="form-group">
+    <label>Nama</label>
+    <input type="text" id="inpNama" placeholder="Contoh: Gunawan" autocomplete="off">
+  </div>
+  <div class="form-group">
+    <label>Role</label>
+    <div class="role-picker" id="rolePicker">
+      <button type="button" class="role-opt role-crew" data-role="crew">
+        <div class="ro-title"><span class="ro-icon">👤</span> Crew</div>
+        <div class="ro-desc">Akses terbatas: kasir, riwayat & lihat produk</div>
+      </button>
+      <button type="button" class="role-opt role-leader" data-role="leader">
+        <div class="ro-title"><span class="ro-icon">👑</span> Leader / SPV</div>
+        <div class="ro-desc">Akses penuh: rekap, edit produk, kategori & pengaturan</div>
+      </button>
+    </div>
+    <input type="hidden" id="inpRole" value="crew">
+  </div>
+  <div class="form-group">
+    <label>PIN (4-6 angka)</label>
+    <div class="pin-input-wrap">
+      <input type="text" id="inpPin" placeholder="••••" inputmode="numeric" maxlength="6" autocomplete="off">
+      <button class="btn btn-ghost btn-gen" id="btnGenPin" title="Generate PIN random">🎲</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">
+      PIN harus unik (tidak boleh sama dengan akun lain).
+    </div>
+  </div>
+  <div class="error-msg" id="userError"></div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" id="btnCancelUser">Batal</button>
+    <button class="btn btn-success" id="btnSaveUser">Simpan</button>
+  </div>
+</div></div>
+
+<!-- MODAL DELETE -->
+<div class="modal-bg" id="deleteModal"><div class="modal" style="max-width:340px;">
+  <h3 style="text-align:center;">⚠️ Hapus Akun?</h3>
+  <div id="deleteInfo" style="text-align:center;margin-bottom:16px;font-size:13px;"></div>
+  <div class="alert orange" style="margin-bottom:0;">
+    Data akun ini akan dihapus permanen. Riwayat transaksi di aplikasi kasir tidak terpengaruh.
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" id="btnCancelDelete">Batal</button>
+    <button class="btn btn-danger" id="btnConfirmDelete">🗑️ Hapus</button>
+  </div>
+</div></div>
+
+<!-- MODAL DETAIL CLOSING -->
+<div class="modal-bg" id="closingDetailModal"><div class="modal wide">
+  <h3>📦 Detail Tutup Toko</h3>
+  <div id="closingDetailBody"></div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" id="btnCloseClosingDetail">Tutup</button>
+  </div>
+</div></div>
+
+<!-- MODAL SETTINGS -->
+<div class="modal-bg" id="settingsModal"><div class="modal">
+  <h3>⚙️ Pengaturan</h3>
+  <div class="menu-list">
+    <button class="menu-item" id="menuTheme">
+      <div class="menu-icon" id="menuThemeIcon">🌙</div>
+      <div class="menu-info">
+        <div class="menu-title" id="menuThemeTitle">Mode Gelap</div>
+        <div class="menu-desc" id="menuThemeDesc">Ganti tampilan terang / gelap</div>
+      </div>
+    </button>
+    <button class="menu-item" id="menuChangePin">
+      <div class="menu-icon">🔑</div>
+      <div class="menu-info">
+        <div class="menu-title">Ganti PIN Manager</div>
+        <div class="menu-desc">Ubah PIN untuk membuka aplikasi ini</div>
+      </div>
+    </button>
+    <button class="menu-item" id="menuBackup">
+      <div class="menu-icon">💾</div>
+      <div class="menu-info">
+        <div class="menu-title">Backup Data Akun</div>
+        <div class="menu-desc">Export semua akun ke file JSON</div>
+      </div>
+    </button>
+    <button class="menu-item" id="menuRestore">
+      <div class="menu-icon">📥</div>
+      <div class="menu-info">
+        <div class="menu-title">Restore Data Akun</div>
+        <div class="menu-desc">Import dari file backup JSON</div>
+      </div>
+    </button>
+    <button class="menu-item" id="menuAbout">
+      <div class="menu-icon">ℹ️</div>
+      <div class="menu-info">
+        <div class="menu-title">Tentang</div>
+        <div class="menu-desc">Versi & info aplikasi</div>
+      </div>
+    </button>
+    <button class="menu-item" id="menuLogout" style="background:var(--warning-soft);">
+      <div class="menu-icon">🚪</div>
+      <div class="menu-info">
+        <div class="menu-title" style="color:var(--warning);">Logout Manager</div>
+        <div class="menu-desc">Keluar dari aplikasi</div>
+      </div>
+    </button>
+    <button class="menu-item danger" id="menuReset">
+      <div class="menu-icon">🗑️</div>
+      <div class="menu-info">
+        <div class="menu-title">Reset Semua Data Akun</div>
+        <div class="menu-desc">Hapus semua akun kasir</div>
+      </div>
+    </button>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" id="btnCloseSettings">Tutup</button>
+  </div>
+</div></div>
+
+<!-- MODAL GANTI PIN -->
+<div class="modal-bg" id="changePinModal"><div class="modal">
+  <h3>🔑 Ganti PIN Manager</h3>
+  <div class="form-group">
+    <label>PIN Lama</label>
+    <input type="password" id="inpOldPin" placeholder="••••" inputmode="numeric" maxlength="6" style="text-align:center;font-family:'Courier New',monospace;font-size:18px;font-weight:700;letter-spacing:6px;">
+  </div>
+  <div class="form-group">
+    <label>PIN Baru (4-6 angka)</label>
+    <input type="password" id="inpNewPin" placeholder="••••" inputmode="numeric" maxlength="6" style="text-align:center;font-family:'Courier New',monospace;font-size:18px;font-weight:700;letter-spacing:6px;">
+  </div>
+  <div class="form-group">
+    <label>Konfirmasi PIN Baru</label>
+    <input type="password" id="inpNewPin2" placeholder="••••" inputmode="numeric" maxlength="6" style="text-align:center;font-family:'Courier New',monospace;font-size:18px;font-weight:700;letter-spacing:6px;">
+  </div>
+  <div class="error-msg" id="changePinError"></div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" id="btnCancelChangePin">Batal</button>
+    <button class="btn btn-success" id="btnSaveChangePin">Simpan</button>
+  </div>
+</div></div>
+
+<input type="file" id="fileRestore" accept="application/json" style="display:none;">
+<textarea id="copyHelper" style="position:fixed;left:-9999px;top:-9999px;opacity:0;"></textarea>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// KONFIG
+// ============================================================
+const USERS_KEY = 'kasen_users';
+const MASTER_PIN_KEY = 'kasen_manager_master';
+const SESSION_KEY = 'kasen_manager_session';
+const THEME_KEY = 'kasen_manager_theme';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAhzAiqHsG5LaC7RurYXQGaFu5a-r9Umqc",
+  authDomain: "posin-aja.firebaseapp.com",
+  projectId: "posin-aja",
+  storageBucket: "posin-aja.firebasestorage.app",
+  messagingSenderId: "482890265442",
+  appId: "1:482890265442:web:a05ff3ba14bc3238f3323b",
+  measurementId: "G-VZZEL9LXN3"
+};
+
+// ✅ HANYA 2 ROLE
+const ROLE_LABEL = {
+  crew: 'Crew',
+  leader: 'Leader / SPV'
+};
+const ROLE_ORDER = { leader:0, crew:1 };
+const VALID_ROLES = ['crew','leader'];
+
+// ✅ Normalize role dari data lama ke 2 role baru
+function normalizeRole(r) {
+  if (!r) return 'crew';
+  r = String(r).toLowerCase().trim();
+  if (r === 'leader' || r === 'owner' || r === 'manager' || r === 'supervisor' || r === 'spv') return 'leader';
+  if (r === 'crew' || r === 'kasir' || r === 'cashier') return 'crew';
+  return 'crew';
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let USERS = [];
+let masterPin = null;
+let editUserId = null;
+let deleteUserId = null;
+let loginPinBuffer = '';
+let fbApp = null;
+let db = null;
+let cloudReady = false;
+let CLOUD_CLOSINGS = [];
+let cloudFilter = 'all';
+let cloudSearchQuery = '';
+let currentDetailId = null;
+
+// ============================================================
+// UTIL
+// ============================================================
+const $ = id => document.getElementById(id);
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const initials = name => (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase();
+
+function fmtRp(n) { return 'Rp ' + (n || 0).toLocaleString('id-ID'); }
+function fmtDateTime(ms) {
+  if (!ms) return '-';
+  try {
+    const d = new Date(ms);
+    return d.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'}) + ' ' +
+      d.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { return '-'; }
+}
+function fmtDateShort(ms) {
+  if (!ms) return '-';
+  try { return new Date(ms).toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'}); }
+  catch(e) { return '-'; }
+}
+function toast(msg, type = '') {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = 'toast ' + type, 2200);
+}
+function loadLS(k, fb) {
+  try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : fb; }
+  catch(e) { return fb; }
+}
+function saveLS(k, v) {
+  try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+  catch(e) { return false; }
+}
+function randomPin(len = 4) {
+  let pin = '';
+  for (let i = 0; i < len; i++) pin += Math.floor(Math.random() * 10);
+  if (/^(.)\1+$/.test(pin)) return randomPin(len);
+  return pin;
+}
+function genUID() { return 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
+function fmtTanggal(iso) {
+  if (!iso) return '-';
+  return new Date(iso).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+}
+function isPinUsed(pin, excludeId = null) {
+  return USERS.some(u => u.pin === pin && u.id !== excludeId);
+}
+function roleLabel(role) { return ROLE_LABEL[normalizeRole(role)] || 'Crew'; }
+
+// ============================================================
+// THEME
+// ============================================================
+function currentTheme() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem(THEME_KEY, t); } catch(e){}
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', t === 'dark' ? '#0b1220' : '#7c3aed');
+  const btn = $('btnTheme');
+  if (btn) { btn.textContent = t === 'dark' ? '☀️' : '🌙'; btn.title = t === 'dark' ? 'Mode Terang' : 'Mode Gelap'; }
+  const mIcon = $('menuThemeIcon'); const mTitle = $('menuThemeTitle'); const mDesc = $('menuThemeDesc');
+  if (mIcon && mTitle && mDesc) {
+    mIcon.textContent = t === 'dark' ? '☀️' : '🌙';
+    mTitle.textContent = t === 'dark' ? 'Mode Terang' : 'Mode Gelap';
+    mDesc.textContent = t === 'dark' ? 'Aktif — klik untuk mode terang' : 'Nonaktif — klik untuk mode gelap';
+  }
+}
+function toggleTheme() { applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'); }
+
+// ============================================================
+// TABS
+// ============================================================
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    const el = $('tab-' + tab); if (el) el.classList.add('active');
+    if (tab === 'laporan') {
+      if (!cloudReady) initCloud();
+      else loadClosings();
+    }
+  });
+});
+
+// ============================================================
+// FIREBASE
+// ============================================================
+function initCloud() {
+  if (typeof firebase === 'undefined' || !firebase.initializeApp) {
+    updateCloudStatus('offline', 'Firebase tidak tersedia', 'Periksa koneksi internet');
+    return;
+  }
+  try {
+    if (!firebase.apps.length) fbApp = firebase.initializeApp(firebaseConfig);
+    else fbApp = firebase.app();
+    db = firebase.firestore();
+    cloudReady = true;
+    updateCloudStatus('ready', 'Terhubung ke Cloud', 'Project: posin-aja');
+    loadClosings();
+  } catch (e) {
+    cloudReady = false;
+    updateCloudStatus('error', 'Gagal terhubung', e.message || 'Error');
+  }
+}
+function updateCloudStatus(state, title, desc) {
+  const icon = $('cloudStatusIcon'); const tEl = $('cloudStatusTitle'); const dEl = $('cloudStatusDesc'); const ind = $('cloudIndicator');
+  if (tEl) tEl.textContent = title;
+  if (dEl) dEl.textContent = desc;
+  const cfg = {
+    ready:   { icon:'☁️', bg:'var(--success-soft)', color:'var(--success)', ind:'☁️' },
+    loading: { icon:'⏳', bg:'var(--warning-soft)', color:'var(--warning)', ind:'⏳' },
+    error:   { icon:'⚠️', bg:'var(--danger-soft)',  color:'var(--danger)',  ind:'⚠️' },
+    offline: { icon:'💤', bg:'var(--border-soft)',  color:'var(--muted)',   ind:'💤' }
+  }[state] || { icon:'☁️', bg:'var(--primary-soft)', color:'var(--primary)', ind:'☁️' };
+  if (icon) { icon.textContent = cfg.icon; icon.style.background = cfg.bg; icon.style.color = cfg.color; }
+  if (ind) { ind.textContent = cfg.ind; ind.style.color = cfg.color; ind.title = title; }
+}
+function loadClosings() {
+  if (!db || !cloudReady) return;
+  updateCloudStatus('loading', 'Memuat data...', 'Mengambil dari Firestore');
+  db.collection('closings').orderBy('timestamp', 'desc').limit(200).get()
+    .then(snapshot => {
+      CLOUD_CLOSINGS = [];
+      snapshot.forEach(doc => { CLOUD_CLOSINGS.push({ id: doc.id, ...doc.data() }); });
+      updateCloudStatus('ready', 'Terhubung ke Cloud', CLOUD_CLOSINGS.length + ' data tersimpan');
+      renderCloudStats();
+      renderClosings();
+    })
+    .catch(err => {
+      updateCloudStatus('error', 'Gagal memuat data', err.message);
+      renderClosings();
+    });
+}
+
+// ============================================================
+// CLOUD STATS & LIST
+// ============================================================
+function getFilteredClosings() {
+  let list = CLOUD_CLOSINGS.slice();
+  if (cloudFilter !== 'all') {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    let from = 0;
+    if (cloudFilter === 'today') from = todayStart;
+    else if (cloudFilter === 'week') from = todayStart - 6 * 86400000;
+    else if (cloudFilter === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    list = list.filter(c => (c.timestamp || 0) >= from);
+  }
+  if (cloudSearchQuery) {
+    const q = cloudSearchQuery.toLowerCase();
+    list = list.filter(c =>
+      (c.closingId || '').toLowerCase().includes(q) ||
+      (c.sessionId || '').toLowerCase().includes(q) ||
+      (c.kasir || '').toLowerCase().includes(q) ||
+      (c.storeName || '').toLowerCase().includes(q) ||
+      (c.deviceId || '').toLowerCase().includes(q)
+    );
+  }
+  return list;
+}
+function renderCloudStats() {
+  const list = getFilteredClosings();
+  const totalSales = list.reduce((s, c) => s + (c.totalPenjualan || 0), 0);
+  const totalSelisih = list.reduce((s, c) => s + (c.selisih || 0), 0);
+  $('statClosingCount').textContent = list.length;
+  $('statClosingSales').textContent = fmtRp(totalSales);
+  $('statClosingSelisih').textContent = fmtRp(totalSelisih);
+  const selisihEl = $('statClosingSelisih');
+  selisihEl.style.color = totalSelisih < 0 ? 'var(--danger)' : totalSelisih > 0 ? 'var(--success)' : 'var(--text)';
+  const countEl = $('cloudListCount');
+  if (countEl) countEl.textContent = list.length + ' data';
+}
+function renderClosings() {
+  renderCloudStats();
+  const c = $('cloudList');
+  const list = getFilteredClosings();
+  if (list.length === 0) {
+    let emptyMsg = 'Belum ada data tutup toko dari aplikasi Kasir Kasen.';
+    let emptySub = 'Data akan muncul otomatis setelah ada tutup toko di device kasir.';
+    if (!cloudReady) { emptyMsg = 'Tidak terhubung ke cloud'; emptySub = 'Periksa koneksi internet dan klik Refresh.'; }
+    else if (CLOUD_CLOSINGS.length > 0) { emptyMsg = 'Tidak ada data dengan filter ini'; emptySub = 'Coba ubah filter atau kata pencarian.'; }
+    c.innerHTML = `<div class="empty-state"><div class="icon">${cloudReady ? '📭' : '☁️'}</div><h3>${escapeHtml(emptyMsg)}</h3><p>${escapeHtml(emptySub)}</p></div>`;
+    return;
+  }
+  c.innerHTML = '<div class="cloud-list">' + list.map(item => {
+    const ts = item.timestamp || item.uploadedAtMs || 0;
+    const selisih = item.selisih || 0;
+    return `
+      <div class="cloud-item" data-closing-id="${escapeHtml(item.id)}">
+        <div class="ci-head">
+          <div class="ci-icon">📦</div>
+          <div class="ci-info">
+            <div class="ci-title">${escapeHtml(item.closingId || item.id)}</div>
+            <div class="ci-meta">📅 ${fmtDateTime(ts)} • 👤 ${escapeHtml(item.kasir || '-')}</div>
+            <div class="ci-meta">🏪 ${escapeHtml(item.storeName || '-')} • 📱 ${escapeHtml(item.deviceId || '-')}</div>
+          </div>
+          <div class="ci-total">
+            ${fmtRp(item.totalPenjualan || 0)}
+            <span class="sub" style="color:${selisih < 0 ? 'var(--danger)' : selisih > 0 ? 'var(--success)' : 'var(--muted)'};">
+              ${selisih === 0 ? 'PAS' : (selisih > 0 ? '+' : '−') + fmtRp(Math.abs(selisih)).slice(3)}
+            </span>
+          </div>
+        </div>
+      </div>`;
+  }).join('') + '</div>';
+  c.querySelectorAll('[data-closing-id]').forEach(el => {
+    el.addEventListener('click', () => openClosingDetail(el.dataset.closingId));
+  });
+}
+function openClosingDetail(id) {
+  const item = CLOUD_CLOSINGS.find(c => c.id === id || c.closingId === id);
+  if (!item) { toast('Data tidak ditemukan', 'error'); return; }
+  currentDetailId = item.id || item.closingId;
+  const ts = item.timestamp || item.uploadedAtMs || 0;
+  const selisih = item.selisih || 0;
+  const selisihLabel = selisih > 0 ? 'Lebih' : selisih < 0 ? 'Kurang' : 'PAS';
+  let produkHtml = '';
+  if (Array.isArray(item.productSummary) && item.productSummary.length > 0) {
+    const sorted = item.productSummary.slice().sort((a,b) => (b.qty||0) - (a.qty||0));
+    produkHtml = sorted.map(p => `<div class="di-row"><span>${escapeHtml(p.nama || '')} × ${p.qty || 0}</span><span>${fmtRp(p.subtotal || 0)}</span></div>`).join('');
+  } else produkHtml = '<div style="text-align:center;color:var(--muted);padding:8px;">Tidak ada produk terjual</div>';
+  let metodeHtml = '';
+  const paySummary = item.paymentSummary || {}; const payCount = item.paymentCount || {};
+  if (Object.keys(paySummary).length > 0) {
+    metodeHtml = Object.keys(paySummary).map(m => `<div class="di-row"><span>${escapeHtml(m)} (${payCount[m] || 0} trx)</span><span>${fmtRp(paySummary[m] || 0)}</span></div>`).join('');
+  } else metodeHtml = '<div style="text-align:center;color:var(--muted);padding:8px;">Tidak ada data</div>';
+
+  $('closingDetailBody').innerHTML = `
+    <div class="cloud-detail-head">
+      <div class="cdh-icon">📦</div>
+      <div class="cdh-info">
+        <div class="cdh-title">${escapeHtml(item.closingId || item.id)}</div>
+        <div class="cdh-sub">${fmtDateTime(ts)} • 👤 ${escapeHtml(item.kasir || '-')}</div>
+      </div>
+    </div>
+    <div class="detail-row"><span class="dk">Sesi</span><span class="dv" style="font-family:'Courier New',monospace;">${escapeHtml(item.sessionId || '-')}</span></div>
+    <div class="detail-row"><span class="dk">Tanggal</span><span class="dv">${fmtDateShort(ts)}</span></div>
+    <div class="detail-row"><span class="dk">Jam Buka - Tutup</span><span class="dv">${escapeHtml(item.jamMulai || '-')} - ${escapeHtml(item.jamTutup || '-')}</span></div>
+    <div class="detail-row"><span class="dk">Kasir</span><span class="dv">👤 ${escapeHtml(item.kasir || '-')}</span></div>
+    <div class="detail-row"><span class="dk">Toko</span><span class="dv">🏪 ${escapeHtml(item.storeName || '-')}</span></div>
+    <div class="detail-row"><span class="dk">Device</span><span class="dv" style="font-size:11px;font-family:'Courier New',monospace;">${escapeHtml(item.deviceId || '-')}</span></div>
+    <div class="cloud-amount-box">
+      <div class="ca-item"><div class="ca-label">Total Penjualan</div><div class="ca-value success">${fmtRp(item.totalPenjualan || 0)}</div></div>
+      <div class="ca-item"><div class="ca-label">Pengeluaran</div><div class="ca-value danger">${fmtRp(item.totalPengeluaran || 0)}</div></div>
+      <div class="ca-item"><div class="ca-label">Penjualan Bersih</div><div class="ca-value">${fmtRp(item.penjualanBersih || 0)}</div></div>
+      <div class="ca-item"><div class="ca-label">Jumlah Trx</div><div class="ca-value">${item.trxCount || 0}</div></div>
+    </div>
+    <div style="margin:14px 0 6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">📋 Produk Terjual</div>
+    <div class="detail-items">${produkHtml}</div>
+    <div style="margin:14px 0 6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">💳 Metode Pembayaran</div>
+    <div class="detail-items">${metodeHtml}</div>
+    <div style="margin:14px 0 6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">💰 Kas & Modal</div>
+    <div class="detail-row"><span class="dk">Uang Modal</span><span class="dv">${fmtRp(item.uangModal || 0)}</span></div>
+    <div class="detail-row"><span class="dk">Uang Fisik</span><span class="dv">${fmtRp(item.uangFisik || 0)}</span></div>
+    <div class="detail-row"><span class="dk">Seharusnya</span><span class="dv">${fmtRp(item.seharusnya || 0)}</span></div>
+    <div class="detail-row"><span class="dk">Selisih (${selisihLabel})</span><span class="dv" style="color:${selisih < 0 ? 'var(--danger)' : selisih > 0 ? 'var(--success)' : 'var(--text)'};">${fmtRp(Math.abs(selisih))}</span></div>
+    ${item.catatan ? `<div style="margin:14px 0 6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">📝 Catatan</div><div style="background:var(--bg);padding:10px;border-radius:var(--radius);font-size:12px;white-space:pre-wrap;">${escapeHtml(item.catatan)}</div>` : ''}
+    <div style="margin-top:14px;font-size:10px;color:var(--faint);text-align:center;">Uploaded: ${fmtDateTime(item.uploadedAtMs || ts)} • ${escapeHtml(item.appVersion || '-')}</div>
+  `;
+  $('closingDetailModal').classList.add('active');
+}
+
+document.querySelectorAll('#cloudFilter .btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#cloudFilter .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    cloudFilter = btn.dataset.filter;
+    renderClosings();
+  });
+});
+$('cloudSearch').addEventListener('input', function() {
+  cloudSearchQuery = this.value.trim();
+  renderClosings();
+});
+$('btnRefreshCloud').addEventListener('click', () => {
+  if (!cloudReady) initCloud();
+  else { toast('🔄 Memuat ulang...'); loadClosings(); }
+});
+$('cloudIndicator').addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="laporan"]').classList.add('active');
+  $('tab-laporan').classList.add('active');
+  if (!cloudReady) initCloud(); else loadClosings();
+});
+$('btnCloseClosingDetail').addEventListener('click', () => {
+  $('closingDetailModal').classList.remove('active');
+  currentDetailId = null;
+});
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  applyTheme(currentTheme());
+  USERS = loadLS(USERS_KEY, []) || [];
+  // ✅ Auto-migrate role lama ke 2 role baru
+  USERS = USERS.map(u => ({ ...u, role: normalizeRole(u.role) }));
+  saveLS(USERS_KEY, USERS);
+
+  masterPin = localStorage.getItem(MASTER_PIN_KEY);
+  setTimeout(initCloud, 500);
+
+  const isLoggedIn = sessionStorage.getItem(SESSION_KEY) === '1';
+  if (!masterPin) showLoginScreen('setup');
+  else if (isLoggedIn) { hideLoginScreen(); render(); }
+  else showLoginScreen('login');
+}
+
+// ============================================================
+// LOGIN
+// ============================================================
+function showLoginScreen(mode) {
+  $('loginScreen').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  $('modePin').style.display = 'none';
+  $('modeSetup').style.display = 'none';
+  $('loginError').textContent = '';
+  $('setupError').textContent = '';
+  if (mode === 'setup') {
+    $('loginLogo').textContent = '🔐';
+    $('loginTitle').textContent = 'Setup Awal';
+    $('loginSub').textContent = 'Buat PIN Manager';
+    $('modeSetup').style.display = 'block';
+    setTimeout(() => { try { $('inpSetupPin').focus(); } catch(e){} }, 200);
+  } else {
+    $('loginLogo').textContent = '🔐';
+    $('loginTitle').textContent = 'Kasen Manager';
+    $('loginSub').textContent = 'Masukkan PIN Manager';
+    $('modePin').style.display = 'block';
+    loginPinBuffer = '';
+    renderPinDisplay();
+  }
+}
+function hideLoginScreen() { $('loginScreen').classList.remove('active'); document.body.style.overflow = ''; }
+function renderPinDisplay() {
+  $('pinDisplay').innerHTML = Array.from({length:6}, (_, i) => `<div class="pin-dot ${i < loginPinBuffer.length ? 'filled' : ''}"></div>`).join('');
+}
+function pressPinDigit(d) {
+  if (loginPinBuffer.length >= 6) return;
+  loginPinBuffer += d; renderPinDisplay();
+  if (loginPinBuffer.length >= 4) {
+    if (loginPinBuffer === masterPin) { setTimeout(doLoginSuccess, 150); return; }
+    if (loginPinBuffer.length === 6) setTimeout(pinError, 200);
+  }
+}
+function pinError() {
+  $('pinDisplay').classList.add('shake');
+  $('loginError').textContent = 'PIN salah, coba lagi';
+  setTimeout(() => { $('pinDisplay').classList.remove('shake'); loginPinBuffer = ''; renderPinDisplay(); }, 400);
+}
+function doLoginSuccess() {
+  sessionStorage.setItem(SESSION_KEY, '1');
+  loginPinBuffer = '';
+  hideLoginScreen();
+  render();
+  toast('Selamat datang di Kasen Manager', 'success');
+}
+$('pinPad').addEventListener('click', e => {
+  const btn = e.target.closest('.pin-key');
+  if (!btn) return;
+  if (btn.dataset.d) pressPinDigit(btn.dataset.d);
+  else if (btn.dataset.action === 'del') { loginPinBuffer = loginPinBuffer.slice(0, -1); renderPinDisplay(); }
+  else if (btn.dataset.action === 'cancel') { loginPinBuffer = ''; renderPinDisplay(); $('loginError').textContent = ''; }
+});
+$('btnDoSetup').addEventListener('click', () => {
+  const p1 = $('inpSetupPin').value.trim();
+  const p2 = $('inpSetupPin2').value.trim();
+  const err = $('setupError');
+  if (!/^\d{4,6}$/.test(p1)) { err.textContent = 'PIN harus 4-6 angka'; return; }
+  if (p1 !== p2) { err.textContent = 'PIN tidak cocok'; return; }
+  try { localStorage.setItem(MASTER_PIN_KEY, p1); } catch(e){}
+  masterPin = p1;
+  sessionStorage.setItem(SESSION_KEY, '1');
+  $('inpSetupPin').value = ''; $('inpSetupPin2').value = '';
+  err.textContent = '';
+  hideLoginScreen(); render();
+  toast('PIN Manager berhasil dibuat', 'success');
+});
+['inpSetupPin','inpSetupPin2'].forEach(id => { $(id).addEventListener('keypress', e => { if (e.key === 'Enter') $('btnDoSetup').click(); }); });
+
+// ============================================================
+// RENDER USERS
+// ============================================================
+function render() {
+  USERS = loadLS(USERS_KEY, []) || [];
+  USERS = USERS.map(u => ({ ...u, role: normalizeRole(u.role) }));
+  saveLS(USERS_KEY, USERS);
+  renderStats();
+  renderUserList();
+}
+function renderStats() {
+  $('statTotal').textContent = USERS.length;
+  $('statLeader').textContent = USERS.filter(u => normalizeRole(u.role) === 'leader').length;
+  $('statCrew').textContent = USERS.filter(u => normalizeRole(u.role) === 'crew').length;
+}
+function renderUserList() {
+  const c = $('userList');
+  if (USERS.length === 0) {
+    c.innerHTML = `<div class="empty-state"><div class="icon">👤</div><h3>Belum Ada Akun</h3><p>Klik "+ Tambah" untuk membuat akun pertama.</p></div>`;
+    return;
+  }
+  const sorted = [...USERS].sort((a, b) => {
+    const d = (ROLE_ORDER[normalizeRole(a.role)] ?? 1) - (ROLE_ORDER[normalizeRole(b.role)] ?? 1);
+    if (d !== 0) return d;
+    return (a.nama || '').localeCompare(b.nama || '');
+  });
+  c.innerHTML = `<div class="user-grid">${sorted.map(u => {
+    const rc = normalizeRole(u.role);
+    return `
+      <div class="user-card" data-id="${u.id}">
+        <div class="uc-head">
+          <div class="uc-av role-${rc}">${escapeHtml(initials(u.nama))}</div>
+          <div class="uc-info">
+            <div class="uc-nama">${escapeHtml(u.nama)}</div>
+            <span class="uc-role role-${rc}">${escapeHtml(roleLabel(u.role))}</span>
+          </div>
+        </div>
+        <div class="uc-pin-row">
+          <span class="lbl">PIN</span>
+          <span class="pin-val" data-pin-hidden="${escapeHtml(u.pin)}">••••</span>
+          <button class="btn-pin" data-action="toggle-pin" data-id="${u.id}" title="Lihat PIN">👁️</button>
+          <button class="btn-pin" data-action="copy-pin" data-id="${u.id}" title="Copy PIN">📋</button>
+        </div>
+        <div class="uc-actions">
+          <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${u.id}">✏️ Edit</button>
+          <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${u.id}" style="color:var(--danger);">🗑️ Hapus</button>
+        </div>
+        ${u.created ? `<div class="uc-meta">Dibuat: ${fmtTanggal(u.created)}</div>` : ''}
+      </div>`;
+  }).join('')}</div>`;
+  c.querySelectorAll('[data-action]').forEach(btn => {
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    btn.addEventListener('click', () => {
+      if (action === 'toggle-pin') togglePin(id, btn);
+      else if (action === 'copy-pin') copyPin(id);
+      else if (action === 'edit') openUserModal(id);
+      else if (action === 'delete') openDeleteModal(id);
+    });
+  });
+}
+function togglePin(id, btn) {
+  const card = btn.closest('.user-card');
+  const pinEl = card.querySelector('.pin-val');
+  const hidden = pinEl.dataset.pinHidden;
+  if (pinEl.textContent === '••••') { pinEl.textContent = hidden; btn.textContent = '🙈'; }
+  else { pinEl.textContent = '••••'; btn.textContent = '👁️'; }
+}
+function copyPin(id) {
+  const u = USERS.find(x => x.id === id);
+  if (!u) return;
+  const text = u.pin;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast('PIN ' + u.nama + ' dicopy: ' + text, 'success'))
+      .catch(() => fallbackCopy(text, u.nama));
+  } else fallbackCopy(text, u.nama);
+}
+function fallbackCopy(text, nama) {
+  const ta = $('copyHelper'); ta.value = text; ta.select();
+  try { document.execCommand('copy'); toast('PIN ' + nama + ' dicopy: ' + text, 'success'); }
+  catch (e) { toast('Gagal copy. PIN: ' + text, 'error'); }
+  ta.value = '';
+}
+
+// ============================================================
+// USER MODAL
+// ============================================================
+function setRolePicker(role) {
+  const nr = normalizeRole(role);
+  $('inpRole').value = nr;
+  document.querySelectorAll('#rolePicker .role-opt').forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.role === nr);
+  });
+}
+document.querySelectorAll('#rolePicker .role-opt').forEach(opt => {
+  opt.addEventListener('click', () => setRolePicker(opt.dataset.role));
+});
+function openUserModal(id = null) {
+  editUserId = id;
+  $('userError').textContent = '';
+  if (id) {
+    const u = USERS.find(x => x.id === id);
+    if (!u) return;
+    $('userModalTitle').textContent = 'Edit Akun';
+    $('inpNama').value = u.nama;
+    setRolePicker(u.role);
+    $('inpPin').value = u.pin;
+    $('inpPin').placeholder = '';
+  } else {
+    $('userModalTitle').textContent = 'Tambah Akun';
+    $('inpNama').value = '';
+    setRolePicker('crew');
+    $('inpPin').value = '';
+    $('inpPin').placeholder = '••••';
+  }
+  $('userModal').classList.add('active');
+  setTimeout(() => { try { $('inpNama').focus(); } catch(e){} }, 150);
+}
+function closeUserModal() { $('userModal').classList.remove('active'); editUserId = null; }
+$('btnGenPin').addEventListener('click', () => {
+  let newPin; let attempts = 0;
+  do { newPin = randomPin(4); attempts++; }
+  while (isPinUsed(newPin, editUserId) && attempts < 50);
+  $('inpPin').value = newPin;
+});
+$('inpPin').addEventListener('input', function() { this.value = this.value.replace(/[^\d]/g, '').slice(0, 6); });
+$('btnSaveUser').addEventListener('click', saveUser);
+$('btnCancelUser').addEventListener('click', closeUserModal);
+function saveUser() {
+  const nama = $('inpNama').value.trim();
+  const role = normalizeRole($('inpRole').value);
+  const pin = $('inpPin').value.trim();
+  const err = $('userError');
+  if (!nama) { err.textContent = 'Nama wajib diisi'; return; }
+  if (!VALID_ROLES.includes(role)) { err.textContent = 'Role tidak valid'; return; }
+  if (!/^\d{4,6}$/.test(pin)) { err.textContent = 'PIN harus 4-6 angka'; return; }
+  if (isPinUsed(pin, editUserId)) { err.textContent = 'PIN sudah dipakai akun lain'; return; }
+  if (editUserId) {
+    const idx = USERS.findIndex(x => x.id === editUserId);
+    if (idx === -1) return;
+    USERS[idx] = { ...USERS[idx], nama, role, pin };
+    toast('Data akun diupdate', 'success');
+  } else {
+    USERS.push({ id: genUID(), nama, role, pin, created: new Date().toISOString() });
+    toast('Akun berhasil ditambahkan', 'success');
+  }
+  saveLS(USERS_KEY, USERS);
+  closeUserModal();
+  render();
+}
+
+// ============================================================
+// DELETE MODAL
+// ============================================================
+function openDeleteModal(id) {
+  const u = USERS.find(x => x.id === id);
+  if (!u) return;
+  deleteUserId = id;
+  $('deleteInfo').innerHTML = `<div style="font-weight:700;font-size:15px;margin-bottom:4px;">${escapeHtml(u.nama)}</div><div style="color:var(--muted);font-size:12px;">${escapeHtml(roleLabel(u.role))} · PIN: ${escapeHtml(u.pin)}</div>`;
+  $('deleteModal').classList.add('active');
+}
+$('btnCancelDelete').addEventListener('click', () => { $('deleteModal').classList.remove('active'); deleteUserId = null; });
+$('btnConfirmDelete').addEventListener('click', () => {
+  if (!deleteUserId) return;
+  USERS = USERS.filter(x => x.id !== deleteUserId);
+  saveLS(USERS_KEY, USERS);
+  $('deleteModal').classList.remove('active');
+  deleteUserId = null;
+  render();
+  toast('Akun dihapus', 'success');
+});
+
+// ============================================================
+// SETTINGS
+// ============================================================
+$('btnSettings').addEventListener('click', () => $('settingsModal').classList.add('active'));
+$('btnCloseSettings').addEventListener('click', () => $('settingsModal').classList.remove('active'));
+$('btnTheme').addEventListener('click', toggleTheme);
+$('menuTheme').addEventListener('click', () => { toggleTheme(); toast(currentTheme() === 'dark' ? 'Mode gelap aktif' : 'Mode terang aktif'); });
+$('menuChangePin').addEventListener('click', () => {
+  $('settingsModal').classList.remove('active');
+  $('inpOldPin').value = ''; $('inpNewPin').value = ''; $('inpNewPin2').value = '';
+  $('changePinError').textContent = '';
+  $('changePinModal').classList.add('active');
+  setTimeout(() => { try { $('inpOldPin').focus(); } catch(e){} }, 100);
+});
+$('btnCancelChangePin').addEventListener('click', () => $('changePinModal').classList.remove('active'));
+['inpOldPin','inpNewPin','inpNewPin2'].forEach(id => {
+  $(id).addEventListener('input', function() { this.value = this.value.replace(/[^\d]/g, '').slice(0, 6); });
+});
+$('btnSaveChangePin').addEventListener('click', () => {
+  const oldP = $('inpOldPin').value.trim();
+  const newP = $('inpNewPin').value.trim();
+  const newP2 = $('inpNewPin2').value.trim();
+  const err = $('changePinError');
+  if (oldP !== masterPin) { err.textContent = 'PIN lama salah'; return; }
+  if (!/^\d{4,6}$/.test(newP)) { err.textContent = 'PIN baru harus 4-6 angka'; return; }
+  if (newP !== newP2) { err.textContent = 'Konfirmasi PIN tidak cocok'; return; }
+  try { localStorage.setItem(MASTER_PIN_KEY, newP); } catch(e){}
+  masterPin = newP;
+  $('changePinModal').classList.remove('active');
+  toast('PIN Manager berhasil diubah', 'success');
+});
+$('menuBackup').addEventListener('click', () => {
+  if (USERS.length === 0) return toast('Belum ada data akun', 'error');
+  const payload = { _meta: { app:'Kasen Manager', version:'1.3', exported:new Date().toISOString(), totalUsers:USERS.length }, users: USERS };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `kasen-users-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  $('settingsModal').classList.remove('active');
+  toast('Backup diunduh', 'success');
+});
+$('menuRestore').addEventListener('click', () => { $('settingsModal').classList.remove('active'); $('fileRestore').click(); });
+$('fileRestore').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const users = Array.isArray(data) ? data : (data.users || []);
+      if (!Array.isArray(users)) throw new Error('Format tidak valid');
+      const valid = users.filter(u => u && typeof u.nama === 'string' && typeof u.pin === 'string')
+        .map(u => ({ id: u.id || genUID(), nama: u.nama, role: normalizeRole(u.role), pin: u.pin, created: u.created || new Date().toISOString() }));
+      if (valid.length === 0) throw new Error('Tidak ada data akun valid');
+      if (!confirm(`Import ${valid.length} akun?\n\n⚠️ Semua data akun saat ini akan diganti.`)) return;
+      const seen = new Set();
+      valid.forEach(u => { if (!u.id || seen.has(u.id)) u.id = genUID(); seen.add(u.id); });
+      USERS = valid;
+      saveLS(USERS_KEY, USERS);
+      render();
+      toast(`Berhasil import ${valid.length} akun`, 'success');
+    } catch (err) { toast('Gagal import: ' + err.message, 'error'); }
+    finally { e.target.value = ''; }
+  };
+  reader.readAsText(file);
+});
+$('menuAbout').addEventListener('click', () => {
+  alert('🧑‍💼 Kasen Manager v1.3\n\n' +
+    'Role: Crew 👤 & Leader/SPV 👑\n' +
+    'Cloud: ' + (cloudReady ? '✅ Terhubung' : '❌ Tidak terhubung') + '\n' +
+    'Total akun: ' + USERS.length + '\n' +
+    'Leader: ' + USERS.filter(u => normalizeRole(u.role) === 'leader').length + '\n' +
+    'Crew: ' + USERS.filter(u => normalizeRole(u.role) === 'crew').length + '\n' +
+    'Closing di cloud: ' + CLOUD_CLOSINGS.length);
+});
+$('menuLogout').addEventListener('click', () => {
+  if (!confirm('Logout dari Kasen Manager?')) return;
+  sessionStorage.removeItem(SESSION_KEY);
+  $('settingsModal').classList.remove('active');
+  showLoginScreen('login');
+});
+$('menuReset').addEventListener('click', () => {
+  if (USERS.length === 0) return toast('Belum ada data', 'error');
+  if (!confirm(`⚠️ Hapus SEMUA ${USERS.length} akun?`)) return;
+  if (!confirm('Yakin?')) return;
+  USERS = [];
+  saveLS(USERS_KEY, USERS);
+  $('settingsModal').classList.remove('active');
+  render();
+  toast('Semua data akun dihapus', 'success');
+});
+$('btnAddUser').addEventListener('click', () => openUserModal(null));
+
+document.querySelectorAll('.modal-bg').forEach(m => {
+  m.addEventListener('click', e => {
+    if (e.target === m) {
+      if (m.id === 'userModal') closeUserModal();
+      else if (m.id === 'deleteModal') { deleteUserId = null; }
+      else if (m.id === 'closingDetailModal') { currentDetailId = null; }
+      m.classList.remove('active');
+    }
+  });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const active = document.querySelector('.modal-bg.active');
+    if (active) active.classList.remove('active');
+  }
+});
+if (window.matchMedia) {
+  try {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+      if (!localStorage.getItem(THEME_KEY)) applyTheme(e.matches ? 'dark' : 'light');
+    });
+  } catch(err) {}
+}
+init();
+</script>
+</body>
+</html>
